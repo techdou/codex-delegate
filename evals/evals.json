@@ -1,0 +1,65 @@
+{
+  "skill_name": "codex",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use Codex as a second reviewer for this repository. Do not change anything; give me the five highest-impact correctness or security findings.",
+      "expected_output": "The agent activates the codex skill, chooses review mode, delegates a bounded read-only review, and returns prioritized findings without modifying the workspace."
+    },
+    {
+      "id": 2,
+      "prompt": "请调用 Codex CLI 帮我把 docs/intro.md 改得更适合初学者，直接修改文件，不需要跑测试。",
+      "expected_output": "The agent activates the codex skill, chooses edit mode rather than agent/unsafe, edits only the requested workspace file, and verifies the change."
+    },
+    {
+      "id": 3,
+      "prompt": "Have Codex fix the failing tests in this project and run the relevant test suite after the patch.",
+      "expected_output": "The agent activates the codex skill, chooses agent mode, performs workspace-scoped edits and tests, then reports verified results without using unsafe mode."
+    },
+    {
+      "id": 4,
+      "prompt": "请用 Codex 告诉我当前 CLI 能看到哪些模型、每个模型支持哪些 reasoning effort，不要根据旧知识猜。",
+      "expected_output": "The agent activates the codex skill and uses --list-models/model metadata discovery before answering; it does not provide a hard-coded stale model list."
+    },
+    {
+      "id": 5,
+      "prompt": "Use Codex with the gpt-5.6-sol model at the deepest reasoning level that this installed CLI actually advertises, then review this repository without editing it.",
+      "expected_output": "The agent queries current model metadata, selects the requested model, resolves the highest advertised reasoning effort dynamically, chooses review mode, and does not hard-code xhigh/max/ultra."
+    },
+    {
+      "id": 6,
+      "prompt": "Codex 的模型列表里有一个我想用的版本，但我想先确认这个账号真的能调它。",
+      "expected_output": "The agent uses --probe-model for the named/requested model and explains that catalog visibility and actual authenticated usability are separate checks."
+    },
+    {
+      "id": 7,
+      "prompt": "继续刚才那个 Codex reviewer 的会话，还是同一个项目，不要重新开上下文。重点追问它刚才提到的第二个问题。",
+      "expected_output": "The agent reuses one stable host-session key with --session auto for the same workspace, causing the wrapper to resume the exact mapped Codex thread instead of using --resume latest or starting a fresh thread."
+    },
+    {
+      "id": 8,
+      "prompt": "我想看这次 Codex 续聊有没有命中缓存，以及缓存 token 占比是多少。",
+      "expected_output": "The agent keeps the same managed session, requests --meta-output, and reports cache hit only from Codex provider usage.cached_input_tokens/input_tokens; it does not infer a hit merely because the thread was resumed."
+    },
+    {
+      "id": 9,
+      "prompt": "帮我检查 Codex Skill 和本机 Codex CLI 现在是否健康、版本是否处于已验证兼容范围，但不要联网升级。",
+      "expected_output": "The agent runs --doctor, reports local Skill/CLI version, auth/capability/compatibility status, and does not perform a remote Skill update check."
+    },
+    {
+      "id": 10,
+      "prompt": "检查 Codex Skill 有没有新版本，但先不要安装。",
+      "expected_output": "The agent uses --check-update against the configured trusted manifest, reports current/latest version and breaking/compatibility metadata, and does not modify the installed Skill."
+    },
+    {
+      "id": 11,
+      "prompt": "确认有新版后，把 Codex Skill 升级到稳定版。",
+      "expected_output": "Only after explicit user authorization, the agent invokes --self-update with --allow-self-update; the updater verifies HTTPS/local source, SHA-256, safe archive paths, candidate runtime, CLI compatibility, and backup before replacement."
+    },
+    {
+      "id": 12,
+      "prompt": "刚升级的 Codex Skill 有问题，回滚到上一个本地备份。",
+      "expected_output": "The agent uses --rollback with --allow-self-update, restores a validated local backup, and preserves a safety backup of the version being replaced."
+    }
+  ]
+}

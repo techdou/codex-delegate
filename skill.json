@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "name": "codex",
+  "version": "1.4.0",
+  "provider_cli": "codex",
+  "compatibility": {
+    "min_cli": null,
+    "tested_through_cli": "0.152.1",
+    "policy": "capability-first; warn on newer CLI",
+    "required_features": [
+      "exec non-interactive mode",
+      "exec --json",
+      "exec --output-last-message",
+      "sandbox read-only/workspace-write",
+      "model selection",
+      "resume",
+      "debug models for dynamic model discovery"
+    ],
+    "note": "No hard minimum is claimed. --doctor combines version metadata with local capability checks."
+  },
+  "updates": {
+    "default_channel": "stable",
+    "automatic_network_checks": false,
+    "manifest_env": ["CODEX_SKILL_MANIFEST_URL", "FOREIGN_CLI_SKILL_MANIFEST_URL"],
+    "explicit_install_opt_in_required": true
+  }
+}
