@@ -1,4 +1,4 @@
-# codex (delegation skill)
+# codex-delegate (delegation skill)
 
 一个 agent 技能（skill）：把有边界的开发任务委派给本地安装的 OpenAI Codex CLI——模型发现与选择、推理力度（reasoning effort）控制、会话延续（同一会话内多轮迭代）、缓存感知的重复评审/写作。适合"让另一个模型干一段活、拿回结果继续主线"的工作流。
 
@@ -12,7 +12,7 @@
 ## 安装
 
 ```bash
-git clone https://github.com/techdou/codex.git ~/.agents/skills/codex
+git clone https://github.com/techdou/codex-delegate.git ~/.agents/skills/codex-delegate
 ```
 
 前置：本机已安装并登录 OpenAI Codex CLI。

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "name": "codex",
-  "version": "1.4.0",
+  "name": "codex-delegate",
+  "version": "1.4.3",
   "provider_cli": "codex",
   "compatibility": {
     "min_cli": null,
@@ -21,7 +21,10 @@
   "updates": {
     "default_channel": "stable",
     "automatic_network_checks": false,
-    "manifest_env": ["CODEX_SKILL_MANIFEST_URL", "FOREIGN_CLI_SKILL_MANIFEST_URL"],
+    "manifest_env": [
+      "CODEX_SKILL_MANIFEST_URL",
+      "FOREIGN_CLI_SKILL_MANIFEST_URL"
+    ],
     "explicit_install_opt_in_required": true
   }
 }

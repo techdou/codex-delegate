@@ -1,5 +1,5 @@
 ---
-name: codex
+name: codex-delegate
 description: Delegate bounded work to the locally installed OpenAI Codex CLI, including model discovery/selection, reasoning control, session continuity, cache-aware repeated review/writing, workspace-scoped coding, and explicit Skill health/update/rollback maintenance. Use only when the user or parent agent explicitly asks for Codex/Codex CLI/OpenAI Codex, asks about Codex models or reasoning, or asks to continue/resume a prior Codex delegation. Do not activate for generic writing, review, analysis, or coding that does not request Codex.
 ---
 
