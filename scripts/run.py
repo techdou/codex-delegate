@@ -26,6 +26,63 @@ READ_ONLY_MODES = {"ask", "review"}
 WRITE_MODES = {"edit", "agent"}
 RECURSION_ENV = "CODEX_SKILL_DEPTH"
 
+
+def bind_kill_on_close_job(proc) -> "int | None":
+    """Windows only: put the child process tree into a Job Object with
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE. The OS then tears down the whole tree
+    when this wrapper dies, including outer-timeout kills that bypass Python
+    cleanup (ZCode/host killing this process cannot orphan codex.exe or the
+    npx MCP servers it spawns). Returns the job handle to keep open, or None
+    when the platform or API call is unavailable."""
+    if os.name != "nt":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class IO_COUNTERS(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_ulonglong) for name in (
+            "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+            "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+    class BASIC_LIMITS(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER),
+            ("PerJobUserTimeLimit", wintypes.LARGE_INTEGER),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.WORD)]
+
+    class EXTENDED_LIMITS(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", BASIC_LIMITS),
+            ("IoInfo", IO_COUNTERS),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    JobObjectExtendedLimitInformation = 9
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+    k32 = ctypes.windll.kernel32
+    job = k32.CreateJobObjectW(None, None)
+    if not job:
+        return None
+    info = EXTENDED_LIMITS()
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if not k32.SetInformationJobObject(
+        job, JobObjectExtendedLimitInformation, ctypes.byref(info), ctypes.sizeof(info)
+    ):
+        k32.CloseHandle(job)
+        return None
+    if not k32.AssignProcessToJobObject(job, int(proc._handle)):
+        k32.CloseHandle(job)
+        return None
+    return int(job)
+
 MODE_CONTRACTS = {
     "ask": (
         "Answer the task directly. This is a read-only delegation: do not modify files. "
@@ -73,6 +130,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--current-model", action="store_true", help="Print the explicitly configured model/reasoning setting, plus catalog default metadata when available.")
     p.add_argument("--bundled-models", action="store_true", help="Use only the model catalog bundled with this Codex binary for discovery.")
     p.add_argument("--search", action="store_true", help="Enable live web search for this Codex run.")
+    p.add_argument("--network-access", action="store_true", help="Allow outbound network in the workspace-write sandbox via sandbox_workspace_write.network_access=true; the file sandbox stays on. Use only when the delegated task must call an HTTP API.")
+    p.add_argument("--no-mcp", action="store_true", help="Start Codex with MCP servers disabled (passes -c mcp_servers={}). Use for pure tasks that need no MCP tools: faster startup, no MCP handshake noise, immune to per-server startup failures.")
     p.add_argument("--output", help="Write final Codex message to a file inside --cwd.")
     p.add_argument("--raw-output", help="Write raw Codex JSONL stdout to a file inside --cwd.")
     p.add_argument("--schema", help="JSON Schema path passed to Codex --output-schema.")
@@ -572,6 +631,12 @@ def main() -> int:
         "agent": "workspace-write",
         "unsafe": "danger-full-access",
     }[args.mode]
+    if args.network_access and args.mode not in ("edit", "agent"):
+        print(
+            "error: --network-access only applies to edit/agent modes (workspace-write sandbox); ask/review run read-only",
+            file=sys.stderr,
+        )
+        return 2
 
     final_capture = cwd / f".codex-skill-final-{os.getpid()}-{secrets.token_hex(4)}.txt"
     shown_capture = str(final_capture) if not args.dry_run else str(cwd / ".codex-skill-final-<temporary>.txt")
@@ -582,6 +647,10 @@ def main() -> int:
     cmd.extend(["--ask-for-approval", "never"])
     if args.search:
         cmd.append("--search")
+    if args.network_access:
+        cmd.extend(["--config", "sandbox_workspace_write.network_access=true"])
+    if args.no_mcp:
+        cmd.extend(["--config", "mcp_servers={}"])
     cmd.extend(["exec", "--json", "--color", "never", "-C", str(cwd), "--sandbox", sandbox])
     cmd.extend(["--output-last-message", shown_capture if args.dry_run else str(final_capture)])
     if args.model:
@@ -655,43 +724,60 @@ def main() -> int:
     child_env[RECURSION_ENV] = str(depth + 1)
 
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
-            input=prompt,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=args.timeout,
             cwd=str(cwd),
             env=child_env,
         )
-    except subprocess.TimeoutExpired as exc:
-        print(f"error: Codex timed out after {args.timeout}s", file=sys.stderr)
-        if exc.stderr:
-            print(str(exc.stderr).strip(), file=sys.stderr)
-        if session_lease:
-            session_lease.release()
-        return 124
     except OSError as exc:
         print(f"error: failed to start Codex CLI: {exc}", file=sys.stderr)
         if session_lease:
             session_lease.release()
         return 126
 
+    job_handle = bind_kill_on_close_job(proc)
+    try:
+        stdout, stderr = proc.communicate(input=prompt, timeout=args.timeout)
+    except subprocess.TimeoutExpired as exc:
+        if job_handle:
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(job_handle)  # OS tears down the whole child tree
+            job_handle = None
+        proc.kill()
+        try:
+            proc.communicate(timeout=10)
+        except Exception:
+            pass
+        print(f"error: Codex timed out after {args.timeout}s", file=sys.stderr)
+        if exc.stderr:
+            print(str(exc.stderr).strip(), file=sys.stderr)
+        if session_lease:
+            session_lease.release()
+        return 124
+    finally:
+        if job_handle:
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(job_handle)
+
     try:
         if raw_path:
-            write_text_file(raw_path, proc.stdout)
+            write_text_file(raw_path, stdout)
 
-        if args.verbose and proc.stderr:
-            print(proc.stderr, file=sys.stderr, end="" if proc.stderr.endswith("\n") else "\n")
+        if args.verbose and stderr:
+            print(stderr, file=sys.stderr, end="" if stderr.endswith("\n") else "\n")
 
         if proc.returncode != 0:
             print(f"error: Codex CLI exited with code {proc.returncode}", file=sys.stderr)
-            detail = (proc.stderr or proc.stdout).strip()
+            detail = (stderr or stdout).strip()
             if detail:
                 print(detail, file=sys.stderr)
             return proc.returncode
 
-        run_meta = parse_run_metadata(proc.stdout)
+        run_meta = parse_run_metadata(stdout)
         cli_session_id = run_meta.get("cli_session_id")
         if managed_resume_id and cli_session_id and str(cli_session_id) != str(managed_resume_id):
             print(
@@ -758,7 +844,7 @@ def main() -> int:
         except (OSError, UnicodeError):
             final = ""
         if not final:
-            final = extract_final(proc.stdout)
+            final = extract_final(stdout)
         if not final:
             print("error: Codex succeeded but no final agent message could be extracted", file=sys.stderr)
             return 65

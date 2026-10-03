@@ -25,6 +25,18 @@ git clone https://github.com/techdou/codex-delegate.git ~/.agents/skills/codex-d
 python3 scripts/run.py --doctor
 ```
 
+## 场景参考
+
+| 模型选择、reasoning 档位 | [model-control.md](references/model-control.md) |
+| 会话延续与缓存复用 | [session-cache.md](references/session-cache.md) |
+| 沙箱、授权与网络开关 | [security.md](references/security.md) |
+| 健康检查、更新与回滚 | [maintenance.md](references/maintenance.md) |
+| 与官方 Codex CLI 的对应关系 | [official-cli.md](references/official-cli.md) |
+| 典型委派工作流 | [workflows.md](references/workflows.md) |
+
+非官方技能：由 TechDou 维护，与 OpenAI 官方无关联。变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+
 ## 目录
 
 ```
